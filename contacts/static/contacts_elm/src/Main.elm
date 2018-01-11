@@ -3,16 +3,20 @@ module Main exposing (..)
 import Dict exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (..)
 import Http
 import Json.Decode as JsonDecode
+import Time exposing (Time)
+import Date exposing (Date)
+import Task exposing (Task)
+import Date.Extra.Format exposing (utcIsoString)
 
 
 type alias Record =
     { full_name : String
     , address : String
-    , value : String
+    , phone : String
     , contact_id : String
+    , created_at : String
     }
 
 
@@ -26,12 +30,17 @@ baseUrl =
 
 type alias Model =
     { records : Dict String Record
+    , last_dt : Maybe Date
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { records = Dict.empty }, preloadRecords )
+    ( { records = Dict.empty
+      , last_dt = Nothing
+      }
+    , fetchRecords Nothing
+    )
 
 
 
@@ -40,6 +49,8 @@ init =
 
 type Msg
     = RecordsFetched (Result Http.Error (List Record))
+    | SetDt Date
+    | Tick Time
     | NoOp
 
 
@@ -47,10 +58,21 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         RecordsFetched (Ok records) ->
-            ( { model | records = mergeRecords model.records records }, Cmd.none )
+            case records of
+                x :: xs ->
+                    ( { model | records = mergeRecords model.records records }, Task.perform SetDt Date.now )
+
+                [] ->
+                    ( model, Cmd.none )
 
         RecordsFetched (Err _) ->
             ( model, Cmd.none )
+
+        SetDt newDate ->
+            ( { model | last_dt = Just newDate }, Cmd.none )
+
+        Tick _ ->
+            ( model, fetchRecords model.last_dt )
 
         NoOp ->
             ( model, Cmd.none )
@@ -62,23 +84,25 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ h1 []
-            [ text "Das Addressbuch" ]
-        , table [ class "table" ]
-            [ tbody [] (recordList (Dict.values model.records)) ]
+    div [ class "container-fluid" ]
+        [ div [ class "row" ]
+            [ h1 []
+                [ text "Das Addressbuch" ]
+            , table [ class "table table-sm" ]
+                [ tbody [] (recordList (Dict.values model.records)) ]
+            ]
         ]
 
 
-recordList records =
-    List.map recordView records
+recordList =
+    List.sortBy .created_at >> List.map recordView
 
 
 recordView record =
     tr []
         [ td [] [ Html.text record.full_name ]
         , td [] [ Html.text record.address ]
-        , td [] [ Html.text record.value ]
+        , td [] [ Html.text record.phone ]
         ]
 
 
@@ -92,8 +116,12 @@ main =
         { view = view
         , init = init
         , update = update
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
+
+
+subscriptions model =
+    Time.every (5 * Time.second) Tick
 
 
 
@@ -101,11 +129,12 @@ main =
 
 
 recordDecode =
-    JsonDecode.map4 Record
+    JsonDecode.map5 Record
         (JsonDecode.field "full_name" JsonDecode.string)
         (JsonDecode.field "address" JsonDecode.string)
-        (JsonDecode.field "value" JsonDecode.string)
+        (JsonDecode.field "phone" JsonDecode.string)
         (JsonDecode.field "contact_id" JsonDecode.string)
+        (JsonDecode.field "created_at" JsonDecode.string)
 
 
 recordsDecode =
@@ -128,8 +157,13 @@ fetch url decoder =
         }
 
 
-preloadRecords =
-    Http.send RecordsFetched (fetch "/api/v1/phonebook/" recordsDecode)
+fetchRecords mb_date =
+    case mb_date of
+        Nothing ->
+            Http.send RecordsFetched (fetch "/api/v1/phonebook/" recordsDecode)
+
+        Just date ->
+            Http.send RecordsFetched (fetch ("/api/v1/phonebook/?created_at__gt=" ++ utcIsoString date) recordsDecode)
 
 
 
@@ -141,7 +175,7 @@ mergeRecords d l =
         x :: xs ->
             case Dict.get x.contact_id d of
                 Just r ->
-                    mergeRecords (Dict.insert x.contact_id { r | value = r.value ++ ", " ++ x.value } d) xs
+                    mergeRecords (Dict.insert x.contact_id { r | phone = r.phone ++ ", " ++ x.phone } d) xs
 
                 Nothing ->
                     mergeRecords (Dict.insert x.contact_id x d) xs

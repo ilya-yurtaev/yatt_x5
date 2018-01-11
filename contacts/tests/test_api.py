@@ -22,10 +22,22 @@ def test_contacts():
     assert response.status_code == 200
     assert len(response.data) == AMOUNT
 
-    now = tz.now()
-    date_filtered_url = "?".join([url, "created_at__gte={}".format(now)])
-    assert 'wtf' in date_filtered_url
+    now = tz.now()  # UTC now
+    date_filtered_url = "?".join(
+        [
+            url, "created_at__gt={}".format(
+                now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")  # TRUE ISO-8601
+            )
+        ]
+    )
     response = client.get(date_filtered_url)
     assert response.status_code == 200
-    # wtf
-    assert len(response.data) == Phone.objects.filter(created_at__gte=now).count()
+    assert len(response.data) == Phone.objects.filter(created_at__gt=now).count()
+
+    LATEST_AMOUNT = 10
+    PhoneFactory.create_batch(LATEST_AMOUNT)
+    assert Phone.objects.filter(created_at__gt=now).count() == LATEST_AMOUNT
+
+    response = client.get(date_filtered_url)
+    assert response.status_code == 200
+    assert len(response.data) == LATEST_AMOUNT

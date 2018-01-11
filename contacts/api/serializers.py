@@ -21,9 +21,14 @@ class PhoneSerializer(WritableNestedModelSerializer):
 class PhoneBookSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='contact.full_name')
     address = serializers.CharField(source='contact.address')
+    phone = serializers.SerializerMethodField()
+
+    def get_phone(self, obj):
+        return obj.pretty_print
 
     class Meta:
         fields = [
-            'contact_id', 'full_name', 'address', 'value',
+            'contact_id', 'full_name', 'address', 'phone',
+            'created_at',
         ]
         model = Phone
