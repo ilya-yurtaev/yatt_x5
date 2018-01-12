@@ -1,6 +1,7 @@
 export venv ?= $(abspath ./venv)
 export PY36 := `which python3.6`
 export PATH := $(venv)/bin:${PATH}
+NUM_PHONES ?= 1
 
 
 test: migrations
@@ -22,6 +23,8 @@ reqs: $(venv)
 loaddata: migrations
 	python manage.py loaddata fixtures.json
 
+phones:
+	python manage.py mk_test_phone ${NUM_PHONES}
 
 clean:
 	rm -rf $(venv)
