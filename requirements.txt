@@ -13,7 +13,7 @@ docopt==0.6.2
 dodgy==0.1.9
 drf-writable-nested==0.3.2
 enum-compat==0.0.2
-eventlet==0.21.0
+eventlet==0.31.0
 factory-boy==2.9.2
 Faker==0.8.8
 greenlet==0.4.12
